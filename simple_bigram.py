@@ -75,7 +75,7 @@ class BigramLanguageModel(nn.Module):
             B,T,C = logits.shape
             logits = logits.view(B*T,C)
             targets = targets.view(B*T)
-            loss = f.cross_entropy(logits,targets)
+            loss = F.cross_entropy(logits,targets)
         return logits,loss
 
     def generate(self,idx,max_new_tokens):
@@ -87,7 +87,7 @@ class BigramLanguageModel(nn.Module):
             # apply softmax to get prob
             prob = torch.softmax(logits, dim=-1)
             # sample from the distribution
-            idx_next = torch.multinomial(prob, num_sample=1)
+            idx_next = torch.multinomial(prob, num_samples=1)
             # append sampled index to the running sequence
             idx = torch.cat((idx,idx_next), dim=1)
 
