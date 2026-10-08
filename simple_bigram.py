@@ -45,6 +45,20 @@ def get_batch(split):
     y = torch.stack([data[i+1:i+block_size+1] for i in ix])
     return x , y
 
+@torch.no_grad()
+def estimate_loss():
+    out = {} 
+    model.eval()    # sets the model to evaluation phase
+    for split in ['train','val']:
+        losses = torch.zeros(eval_iters)
+        for k in range(eval_iters):
+            X , Y = get_batch(split)
+            logits , loss = model(X,Y)
+            losses[k] =   loss.item()
+        out[split] = losses.mean()
+    model.train()
+    return out
+
 class BigramLanguageModel(nn.Module):
     def __init__(self,vocab_size):
         super().__init__()
@@ -60,7 +74,51 @@ class BigramLanguageModel(nn.Module):
         else:
             B,T,C = logits.shape
             logits = logits.view(B*T,C)
-            targets = targets
+            targets = targets.view(B*T)
+            loss = f.cross_entropy(logits,targets)
+        return logits,loss
+
+    def generate(self,idx,max_new_tokens):
+        for _ in range(max_new_tokens):
+            # get predictions
+            logits , loss = self(idx)
+            # focus only on the last time step
+            logits = logits[:,-1,:]
+            # apply softmax to get prob
+            prob = torch.softmax(logits, dim=-1)
+            # sample from the distribution
+            idx_next = torch.multinomial(prob, num_sample=1)
+            # append sampled index to the running sequence
+            idx = torch.cat((idx,idx_next), dim=1)
+
+        return idx
+
+model = BigramLanguageModel(vocab_size)
+m = model.to(device)
+
+# create a pytorch optimizer
+
+optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
+
+for iter in range(max_iters):
+
+    # every once in a while evaluate the loss on train and val sets
+    if iter % eval_interval == 0:
+        pass
+
+    # sample a batch of data 
+    xb, yb = get_batch('train')
+
+    # calculate loss
+    logits , loss = model(xb,yb)
+    optimizer.zero_grad(set_to_none=True)
+    loss.backward()
+    optimizer.step()
+
+# generate from the model
+
+    
+
     
 
 
