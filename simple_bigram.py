@@ -50,13 +50,13 @@ def estimate_loss():
     out = {} 
     model.eval()    # sets the model to evaluation phase
     for split in ['train','val']:
-        losses = torch.zeros(eval_iters)
-        for k in range(eval_iters):
+        losses = torch.zeros(eval_iters)  # tensor of 200
+        for k in range(eval_iters):  # 200 iterations
             X , Y = get_batch(split)
             logits , loss = model(X,Y)
             losses[k] =   loss.item()
         out[split] = losses.mean()
-    model.train()
+    model.train()   # sets the model back to training phase
     return out
 
 class BigramLanguageModel(nn.Module):
