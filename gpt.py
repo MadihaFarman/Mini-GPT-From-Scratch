@@ -60,12 +60,39 @@ def estimate_loss():
     model.train()   # sets the model back to training phase
     return out
 
+class Head(nn.Module):
+    """One head of self attention"""
+    def __init__(self,head_size):
+        super().__init__()
+        self.key = nn.Linear(n_embd,head_size,bias=False)
+        self.query = nn.Linear(n_embd,head_size,bias=False)
+        self.value = nn.Linear(n_embd,head_size,bias=False)
+        self.register_buffer('tril',torch.tril(torch.ones(block_size,block_size)))   # tril is not included in model params, so we have to assign it to model using register_buffer
+
+
+    def forward(self,x):
+        B,T,C = x.shape
+        k = self.key(x)  # (B,T,C)
+        q = self.query(x)
+
+        # compute attention scores
+        wei = q @ k.transpose(-2,-1) * C**-0.5   # (B,T,C) @ (B,C,T) ---> (B,T,T)
+        wei = wei.masked_fill(self.tril[:T,:T]==0, float('-inf'))  # (B,T,T)
+        wei = F.softmax(wei,dim=-1)   # (B,T,T)
+
+        # perform weighted aggregation of values
+        v = self.value(x)   # (B,T,C)
+        out = wei @ v # (B,T,T) @ (B,T,C) ----> (B,T,C)
+
+        return out
+        
+
 class BigramLanguageModel(nn.Module):
     def __init__(self):
         super().__init__()
 
         # each token directly reads next token logits from a lookup table
-        
+
         self.token_embedding_model = nn.Embedding(vocab_size,n_embd)
         self.position_embedding_table = nn.Embedding(block_size,n_embd)
         self.lm_head = nn.Linear(n_embd,vocab_size)   # to go from token emb (B,T,C(n_embd)) to logits (B,T,C(vocab_size)) we need a linear layer
