@@ -116,7 +116,7 @@ class BigramLanguageModel(nn.Module):
         B,T = idx.shape
 
         tok_emb = self.token_embedding_model(idx)   # (B,T,C)  ---- (B, T, n_embd)
-        pos_emb = self.position_embedding_table(torch.arrange(T,device=device))  # (T,C)
+        pos_emb = self.position_embedding_table(torch.arange(T,device=device))  # (T,C)
         x = tok_emb + pos_emb   # (B,T,C)
         x = self.sa_heads(x)   # apply multiple heads of self-attention
         logits = self.lm_head(x)   # (B,T,C)  ---- C = vocab_size
@@ -149,7 +149,7 @@ class BigramLanguageModel(nn.Module):
 
         return idx
 
-model = BigramLanguageModel(vocab_size)
+model = BigramLanguageModel()
 m = model.to(device)
 
 # create a pytorch optimizer
