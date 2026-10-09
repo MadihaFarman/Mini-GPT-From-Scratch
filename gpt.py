@@ -9,6 +9,7 @@ learning_rate = 1e-2
 max_iters = 3000
 eval_iters = 200
 eval_interval = 300
+n_embd = 32
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # -------------------
@@ -64,10 +65,23 @@ class BigramLanguageModel(nn.Module):
         super().__init__()
 
         # each token directly reads next token logits from a lookup table
-        self.token_embedding_model = nn.Embedding(vocab_size,vocab_size)
+        
+        self.token_embedding_model = nn.Embedding(vocab_size,n_embd)
+        self.position_embedding_table = nn.Embedding(block_size,n_embd)
+        self.lm_head = nn.Linear(n_embd,vocab_size)   # to go from token emb (B,T,C(n_embd)) to logits (B,T,C(vocab_size)) we need a linear layer
+
+        # under the hood : # For each token vector of length n_embd:
+                           # output_vector = token_vector @ weight_matrix.T + bias
 
     def forward(self,idx,targets=None):
-        logits = self.token_embedding_model(idx)
+        B,T = idx.shape
+
+        tok_emb = self.token_embedding_model(idx)   # (B,T,C)  ---- (B, T, n_embd)
+        pos_emb = self.position_embedding_table(torch.arrange(T,device=device))  # (T,C)
+        x = tok_emb + pos_emb   # (B,T,C)
+        logits = self.lm_head(x)   # (B,T,C)  ---- C = vocab_size
+
+        #  Because toke_emb lives in a hidden embedding space of size n_embd, it cannot be directly used to compute loss or sample characters—we need scores for every token in our vocabulary (vocab_size).self.lm_head (Language Model Head) is a linear projection layer (y = xW^T + b) that maps each n_embd-dimensional vector back to a vocab_size-dimensional vector of raw logits.
 
         if targets is None:
             loss = None
