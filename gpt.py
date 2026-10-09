@@ -86,6 +86,18 @@ class Head(nn.Module):
 
         return out
 
+
+class MultiHeadAttention(nn.Module):
+    """multiple heads of self attention in parallel"""
+
+    def __init__(self,num_heads,head_size):
+        super().__init__()
+        self.heads = nn.ModuleList([Head(head_size) for _ in range(num_heads)])
+
+    def forward(self,x):
+        return torch.cat([h(x) for h in self.heads], dim=-1)
+
+
 class FeedFoward(nn.Module):
     """ a simple linear layer followed by a non-linearity """
 
@@ -99,16 +111,21 @@ class FeedFoward(nn.Module):
     def forward(self, x):
         return self.net(x)
         
+class Block(nn.Module):
+    """ Transformer block: communication followed by computation """
 
-class MultiHeadAttention(nn.Module):
-    """multiple heads of self attention in parallel"""
-
-    def __init__(self,num_heads,head_size):
+    def __init__(self, n_embd, n_head):
+        # n_embd: embedding dimension, n_head: the number of heads we'd like
         super().__init__()
-        self.heads = nn.ModuleList([Head(head_size) for _ in range(num_heads)])
+        head_size = n_embd // n_head
+        self.sa = MultiHeadAttention(n_head, head_size)
+        self.ffwd = FeedFoward(n_embd)
+       
 
-    def forward(self,x):
-        return torch.cat([h(x) for h in self.heads], dim=-1)
+    def forward(self, x):
+        x =  self.sa(x)
+        x =  self.ffwd(x)
+        return x
 
     
 class BigramLanguageModel(nn.Module):
@@ -119,8 +136,11 @@ class BigramLanguageModel(nn.Module):
 
         self.token_embedding_model = nn.Embedding(vocab_size,n_embd)
         self.position_embedding_table = nn.Embedding(block_size,n_embd)
-        self.sa_heads = MultiHeadAttention(4,n_embd//4)  # 4 heads of 8 dim self-attention
-        self.ffwd = FeedFoward(n_embd)
+        self.blocks = nn.Sequential(
+            Block(n_embd,n_head=4),
+            Block(n_embd,n_head=4),
+            Block(n_embd,n_head=4)
+        )
         self.lm_head = nn.Linear(n_embd,vocab_size)   # to go from token emb (B,T,C(n_embd)) to logits (B,T,C(vocab_size)) we need a linear layer
 
         # under the hood : # For each token vector of length n_embd:
@@ -132,8 +152,7 @@ class BigramLanguageModel(nn.Module):
         tok_emb = self.token_embedding_model(idx)   # (B,T,C)  ---- (B, T, n_embd)
         pos_emb = self.position_embedding_table(torch.arange(T,device=device))  # (T,C)
         x = tok_emb + pos_emb   # (B,T,C)
-        x = self.sa_heads(x)   # apply multiple heads of self-attention
-        x = self.ffwd(x)  # (B,T,C)
+        x = self.blocks(x)  # (B,T,C)
         logits = self.lm_head(x)   # (B,T,C)  ---- C = vocab_size
 
         #  Because toke_emb lives in a hidden embedding space of size n_embd, it cannot be directly used to compute loss or sample characters—we need scores for every token in our vocabulary (vocab_size).self.lm_head (Language Model Head) is a linear projection layer (y = xW^T + b) that maps each n_embd-dimensional vector back to a vocab_size-dimensional vector of raw logits.
